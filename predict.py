@@ -1,6 +1,4 @@
-"""
-多个图像测试
-"""
+
 
 import os
 import argparse
@@ -52,11 +50,6 @@ parser.add_argument('--month', type=int, default=11)  # range[1, 25]
 parser.add_argument('--method', type=str, default='swinT')
 parser.add_argument('--seed', type=int, default=0)
 
-# parser.add_argument('--max_holes', type=int, default=5)
-# parser.add_argument('--img_size', type=int, default=160)
-# parser.add_argument('--img_h', type=int, default=32)
-# parser.add_argument('--img_w', type=int, default=55)
-# parser.add_argument('--img_size', type=int, default=56)
 setup_seed(parser.parse_args().seed)
 
 model_name = "swin"  # "swin"
@@ -76,21 +69,12 @@ def main(args):
         config_dir = oj(args.config, f'floor{args.floor}', f'{args.method}_mask{int(args.mask_ratio*100)}', 'config.json')
         output_imgDir = oj(args.output_imgDir, f'floor{args.floor}', f'month{args.month}',
                         f'{args.method}_mask{int(args.mask_ratio*100)}')
-        # mask test
-        # output_imgDir = oj(args.output_imgDir, f'update_mask_r{args.seed}', f'floor{args.floor}', f'month{args.month}',
-        #                 f'{args.method}_mask{int(args.mask_ratio*100)}')
 
     elif args.dataset == 'CNG':
         modelDir = args.modelDir
         test_dir = oj(args.test_dir, 'predict')
         config_dir = oj(args.config, 'config.json')
         output_imgDir = oj(args.output_imgDir)
-
-    # caculate some variant
-    # w = args.img_w
-    # h = args.img_h
-    # input_size = args.img_size
-    # blank = int((input_size - h) / 2)
 
     # =============================================
     # Load model
@@ -132,42 +116,14 @@ def main(args):
     #     mask_ratio=mask_ratio
     # )
 
-    # 将mask的RP信息保存在csv中
     wd_maskRp(mask, args.floor, oj(output_imgDir, 'mask_data'))
 
     for input_img in test_set:
-        # mask = gen_input_mask_random(
-        #     shape=(1, 1, img0.shape[2], img0.shape[3]),
-        #     mask_ratio=mask_ratio
-        # )
-        #
-        # # 将mask的RP信息保存在csv中
-        # wd_maskRp(mask, args.floor, oj(output_imgDir, 'mask_data'))
 
         img = Image.open(oj(test_dir, input_img))
         # convert img to tensor
-        # img = transforms.Pad([0, blank, input_size - w, blank], fill=55, padding_mode="constant")(img)
-        # img = transforms.Resize(args.img_size)(img)
-        # img = transforms.RandomCrop((args.img_size, args.img_size))(img)
         x = transforms.ToTensor()(img)
-        # x_origion = copy.deepcopy(x)
         x = torch.unsqueeze(x, dim=0)
-        # print(np.array(x))
-
-        # create mask
-        # mask = gen_input_mask(
-        #     shape=(1, 1, x.shape[2], x.shape[3]),
-        #     hole_size=(
-        #         (args.hole_min_w, args.hole_max_w),
-        #         (args.hole_min_h, args.hole_max_h),
-        #     ),
-        #     max_holes=args.max_holes,
-        # )
-        # mask提到前面，每个AP同一个mask
-        # mask = gen_input_mask_random(
-        #     shape=(1, 1, x.shape[2], x.shape[3]),
-        #     mask_ratio=mask_ratio
-        # )
 
         # inpaint
         model.eval()
@@ -185,54 +141,15 @@ def main(args):
             x_mask = transforms.ToPILImage()(x_mask[0]).convert('L')
             inpainted = transforms.ToPILImage()(inpainted[0]).convert('L')
 
-            # inpainted.show()
-            # x_origion.save(oj(args.output_imgDir, 'x.png'))
-            # x_mask.save(oj(args.output_imgDir, 'mask.png'))
-            # inpainted.save(oj(args.output_imgDir, 'inpainted.png'))
 
             x_origion_array = np.array(x_origion, dtype=np.float64)
             x_mask = np.array(x_mask, dtype=np.float64)
             inpainted = np.array(inpainted, dtype=np.float64)
 
-            # index = int(input_img.split('.')[0])
-            # mask_hui = Image.fromarray(x_mask.astype('uint8'))
-            # mask_hui = mask_hui.convert('L')
-            # mask_hui.save(oj("/nfs/UJI_LIB/data/network_img/mask/", f'{index}.png'))
-            #
-            # true_hui = Image.fromarray(x_origion_array.astype('uint8'))
-            # true_hui = true_hui.convert('L')
-            # true_hui.save(oj("/nfs/UJI_LIB/data/network_img/true/", f'{index}.png'))
-
-
-            # x_origion_array = x_origion_array[blank: h + blank]
-            # x_origion_array = x_origion_array[:, :w]
-            # x_mask = x_mask[blank: h + blank]
-            # x_mask = x_mask[:, :w]
-            # inpainted = inpainted[blank: h + blank]
-            # inpainted = inpainted[:, :w]
-
             # print(x_origion_array)
             x_origion_array = toRSSIMap(x_origion_array)
             x_mask = toRSSIMap(x_mask)
             inpainted = toRSSIMap(inpainted)
-
-            # # inpainted replaced unmask
-            # inpainted = x_origion_array + (inpainted - x_origion_array) * mask
-
-            # inpainted(matrix, numpy) to (list, dataframe): (x, y, floor, rssi_ls)
-
-            # CNGtemplate = getCNGtemplate()
-
-            # long term dataset not use
-            # inpainted = inpainted * CNGtemplate
-            #
-            # inpainted[inpainted == 0] = -100
-
-            # print(x_origion_array)
-
-            # np.savetxt(args.output_imgDir + "x.txt", x_origion_array)
-            # np.savetxt(args.output_imgDir + "x_mask.txt", x_mask)
-            # np.savetxt(args.output_imgDir + "x_inpaint.txt", inpainted)
 
             # plotSns
             index = int(input_img.split('.')[0])
@@ -262,13 +179,9 @@ def main(args):
             floorTrue_df[f'{index}'] = x_origion_ls
             floorInpa_df[f'{index}'] = inpainted_ls
 
-            # 不用见-1200
-            # error = sum(((inpainted_ls - x_origion_ls) ** 2) ** 0.5) / (len(x_origion_ls) - 1200)
             error = sum(((inpainted_ls - x_origion_ls) ** 2) ** 0.5) / (len(x_origion_ls))
             err_ls.append(error)
             img_dt_err[input_img] = error
-            # print(error)
-            # mae = np.linalg.norm(x_origion_ls - inpainted_ls, ord=1) / (len(x_origion_ls) - 1200)
             mae = np.linalg.norm(x_origion_ls - inpainted_ls, ord=1) / (len(x_origion_ls))
             mae_ls.append(mae)
 
@@ -286,8 +199,6 @@ def main(args):
     CDF(err_ls, err_dir)
     with open(oj(err_dir, 'err_result.json'), 'w') as f:
         json.dump(predictJson, f, indent=4)
-
-    # 保存True和Inpainted后的radio map(dataframe), add x, y, floor
     saveTrInpa(floorTrue_df, floorInpa_df, args.floor, oj(output_imgDir, 'inpainted_data2'))
 
 

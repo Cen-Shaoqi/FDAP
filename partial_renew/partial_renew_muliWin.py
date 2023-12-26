@@ -13,6 +13,7 @@ from sklearn.cross_decomposition import PLSRegression
 from sklearn.model_selection import GridSearchCV
 import seaborn as sns
 import scipy
+import pickle
 
 np.set_printoptions(threshold=np.inf)
 
@@ -26,37 +27,6 @@ goodp_threshold = -70
 
 test_dir = oj('/nfs/UJI_LIB/data/updateDataset/', f'floor_{floor}', 'predict', f'month_{month}')
 test_set = ls(test_dir)
-
-
-def sliding_window(data, w_size):
-    a, b = data.shape
-    m, n = w_size
-    result = []
-    for i in range(0, a, m):
-        line = []
-        for j in range(0, b, n):
-            x = data[i:i+m, j:j+n]  # 选取区域
-            # quality_detect algorithm
-            # if satified:
-            # update algorithm
-            # else:
-            #
-            line.append(np.sum(x)/(n*m))
-        result.append(line)
-    return np.array(result)
-
-
-def sliding_window2(data, w_size, stride=1):
-    a, b = data.shape
-    m, n = w_size
-    result = []
-    for i in range(0, a, stride):
-        line = []
-        for j in range(0, b, stride):
-            x = data[i:i+m, j:j+n]  # 选取区域
-            line.append(np.sum(x)/(n*m))
-        result.append(line)
-    return np.array(result)
 
 
 def local_update(coord_ls, target, source):
@@ -80,9 +50,11 @@ def cal_quality(data, start_x, start_y):
     isGreat = False
     update_coord_ls = None
     observe_array = np.count_nonzero(data)
-    observe_sum = np.sum(observe_array)
-    score = observe_sum/np.size(data)
-    # if score >= 0.5:
+    # get score
+    with open("./quality_predict.pkl", 'rb') as f:
+        predict_model = pickle.load(f)
+
+    score = predict_model.predict(observe_array)
     if score >= 0.3:
         isGreat = True
 
@@ -98,14 +70,6 @@ def map_coord(coord_ls):
     for coord in coord_ls:
         map_coord_ls.append([x_ls[coord[1]], y_ls[coord[0]], floor])
     return map_coord_ls
-
-
-# def get_outdateCoord(data_um, data_outdate):
-#     coord_ls = []
-#     exist = data_um.iloc[:,:3]
-#     full = data_outdate.iloc[:,:3]
-#     for
-#     return coord_ls
 
 
 def get_wSize_ls(h, w):
@@ -127,7 +91,6 @@ def get_localArea(sampled_coord, map_m, w_size, stride=1):
         m, n = w_size[0], w_size[1]
         update_ls = []
         for i in range(0, h, stride):
-            # line = []
             for j in range(0, w, stride):
                 local_m = map_m[i:i + m, j:j + n]
                 # get quality
@@ -138,7 +101,6 @@ def get_localArea(sampled_coord, map_m, w_size, stride=1):
 
     update_ls = list(set(update_ls))
     localUpdate_coord = map_coord(update_ls)
-    # 和采样RP合并
     localUpdate_coord = sampled_coord.values.tolist() + localUpdate_coord
     return localUpdate_coord
 
@@ -159,10 +121,8 @@ def plot_scatter(coords1, coords2):
     plt.scatter(coords1[:, 0], coords1[:, 1], color='#1597A5', label='Realiable Signals', marker='o')
     plt.scatter(coords2[:, 0], coords2[:, 1], color='#FEB3AE', label='Sampled Signals', marker='x')
 
-    # plt.legend(loc='upper right')
     plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05),
           ncol=5, frameon=False)
-    # plt.legend(bbox_to_anchor=(1.05, 0), loc=3, borderaxespad=0)
     # plt.savefig(oj(savPath, f'RP_scatter.eps'), format="eps")
     plt.show()
     plt.close()
@@ -175,7 +135,6 @@ def sliding_window_renew(sampled_coord, data_um, data_update, data_outdate, map_
     # plot_scatter(np.array(localUpdate_coord), np.array(sampled_coord))
 
     # divide local and not in local area
-    # 选取除前三列的值，并转为 np.array
     T0_train, T0_test = divide_localArea(data_outdate, localUpdate_coord)
     T1_train, T1_test = divide_localArea(data_update, localUpdate_coord)
     X_train = np.array(T0_train.iloc[:, 3:])
@@ -184,30 +143,22 @@ def sliding_window_renew(sampled_coord, data_um, data_update, data_outdate, map_
 
     pred_header_ls = T1_train.columns.values
     coords = np.array(T0_test.iloc[:, :3])
-    # 回归模型，参数
     pls_model_setup = PLSRegression(scale=True)
     param_grid = {'n_components': range(1, 4)}
 
-    # GridSearchCV 自动调参
     gsearch = GridSearchCV(pls_model_setup, param_grid)
 
-    # 在训练集上训练模型
     pls_model = gsearch.fit(X_train, y_train)
 
-    # 预测
     T1_pred = pls_model.predict(X_test)
     T1_pred = np.concatenate((coords, T1_pred), axis=1)
     T1_pred = pd.DataFrame(T1_pred, columns=pred_header_ls)
-
-    # local update
-    # data_um = local_update(localUpdate_coord, data_um, data_update)
 
     data = T1_pred
     data = data.append(T1_train)
     data.sort_values(by=['y', 'x'], ascending=True, inplace=True)
     data[data <= -100] = -105
 
-    # return data.iloc[:, :col_num]
     return data
 
 
@@ -228,7 +179,6 @@ def get_mask(seed):
                 mask_ratio=mask_ratio
         )
 
-    # wd_maskRp(mask, floor, "/nfs/UJI_LIB/data/point_detect/points/")
     mask = np.array(mask, dtype=np.int32)
 
     mask[mask==1] = 2
@@ -317,10 +267,6 @@ def extra_same_elem(list1, list2):
     return iset
 
 
-# def merge_outdateTrue_AP(data_outdate_header_ls, data_true_header_ls):
-#
-#     return data_outdate_merge, data_true_merge
-
 def main():
     # set seed
     seed = 7
@@ -365,21 +311,11 @@ def main():
     local_error_ls = calculate_error(update_local, data_true)
     aver_error = np.mean(local_error_ls)
     print("local update: ", aver_error)
-    # print("local max error: ", max(error_ls))
-    # print(len(error_ls))
 
     global_error_ls = calculate_error(data_update, data_true)
     aver_error = np.mean(global_error_ls)
     print("global update:", aver_error)
 
-
-    # data_outdate_merge, data_true_merge = merge_outdateTrue_AP(data_outdate_header_ls, data_true_header_ls)
-    # outdate_error_ls = calculate_error(data_outdate_merge, data_true_merge)
-    # aver_error = np.mean(outdate_error_ls)
-    # print("outdate update:", aver_error)
-
-    # plot
-    # plot_cdf(local_error_ls, global_error_ls)
 
     # plot error bar
     plot_err_bar(local_error_ls, global_error_ls, savePath="./")
